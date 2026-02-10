@@ -79,7 +79,7 @@ def crawl_tiki():
     all_products = []
     for catalog in catalogs:
         print(f"Crawl: {catalogs_[catalog]}")
-        for page in range(1, 3):
+        for page in range(1, 36):
             try:
                 products = get_products(catalog, page=page)
                 if not products:

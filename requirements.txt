@@ -1,6 +1,16 @@
-minio==7.2.20
-selenium-wire==5.1.0
-selenium==4.40.0
-blinker==1.7.0
-beautifulsoup4==4.14.3
-requests==2.32.5
+minio==7.2.10
+# selenium-wire==5.1.0
+# selenium==4.40.0
+# blinker==1.7.0
+# beautifulsoup4==4.14.3
+# requests==2.32.5
+# apache-airflow==2.10.2
+clickhouse-connect==0.6.12
+clickhouse-driver==0.2.9
+pandas==2.0.3
+
+apache-airflow-providers-apache-spark==4.8.1
+apache-airflow-providers-amazon==8.24.0
+pyspark==3.5.0
+
+psycopg2-binary

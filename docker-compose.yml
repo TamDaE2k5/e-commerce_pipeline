@@ -1,0 +1,237 @@
+version: "3.8"
+
+x-airflow-common: &airflow-common
+  build: 
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - .env
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.10.2-python3.8}
+  environment: &airflow-common-env
+    # EXECUTOR
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    
+    # DATABASE (CẤU HÌNH MỚI)
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    
+    # CELERY (CẤU HÌNH MỚI)
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    
+    # CORE SETTINGS
+    AIRFLOW__CORE__FERNET_KEY: Pox0d78cNDJFs285aibWNQsAhgD_4xJ1JFbDTXTVw3w=
+    AIRFLOW__WEBSERVER__SECRET_KEY: airflow-secret-key-123
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: 'false'
+    
+    # API AUTH (CẤU HÌNH MỚI)
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    
+    # SCHEDULER
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    
+    # ADDITIONAL
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+    AIRFLOW_CONN_SPARK_DEFAULT: spark://spark-master:7077
+    AIRFLOW_CONN_MINIO_S3: aws://minioadmin:minioadmin@?endpoint_url=http://minio:9000
+  
+    
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./requirements.txt:/opt/airflow/requirements.txt
+    - ./bronze:/opt/airflow/bronze
+    - ./scripts:/opt/airflow/scripts
+    - ./webserver_config.py:/opt/airflow/webserver_config.py
+
+  user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-0}"
+  networks: 
+    - data-network
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    networks:
+      - data-network
+
+  redis:
+    image: redis:7
+    networks:
+      - data-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+    restart: unless-stopped
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    depends_on:
+      - airflow-init
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}" || exit 0']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    depends_on:
+      - airflow-init
+      - redis
+
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || exit 0'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    depends_on:
+      - airflow-init
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}" || exit 0']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    depends_on:
+      - airflow-init
+
+  airflow-init:
+    <<: *airflow-common
+    user: "0:0"
+    command: >
+      bash -c "airflow db init &&
+      airflow users create --username airflow --firstname Admin --lastname User --role Admin --email admin@example.com --password airflow"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  flower:
+    <<: *airflow-common
+    command: celery flower
+    ports:
+      - "5555:5555"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: always
+    depends_on:
+      - airflow-init
+
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - ./minio-data:/data
+    networks:
+      - data-network
+    
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - 8081:8080
+      - 7077:7077
+    networks:
+      - data-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: spark-worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master
+    networks:
+      - data-network
+
+  clickhouse-server:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-server
+    networks:
+      - data-network
+    ports:
+      - "8123:8123"
+      - "9090:9090"
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: your_password
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: always
+    depends_on:
+      - spark-master
+
+networks:
+  data-network:
+    driver: bridge
+    name: data-network
+
+volumes:
+  postgres-db-volume:
+  minio-data:
+  clickhouse_data:
