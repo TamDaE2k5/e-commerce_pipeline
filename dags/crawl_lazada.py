@@ -56,7 +56,7 @@ def crawl_lazada():
             box.send_keys(kw, Keys.ENTER)
 
             # cào 5 trang lấy ví dụ
-            for p in range(1,4):
+            for p in range(1,2):
                 if p == 1:
                     # chỉ cần đợi dom product
                     WebDriverWait(driver, 15).until(

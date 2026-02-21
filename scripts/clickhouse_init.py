@@ -10,7 +10,7 @@ def main():
         host='clickhouse-server',
         port=9000,
         user='default',
-        password='your_password',
+        password='your_pass',
     )
 
     # 1. Kiểm tra và xóa database nếu tồn tại
@@ -29,7 +29,7 @@ def main():
         CREATE TABLE data_mart.df_trend_day_of_week (
                 crawl_day_of_week String,
                 total_quantity_sold  UInt64,
-                total_income UInt128,
+                total_income UInt64,
                 avg_quantity_sold Float64 )
         ENGINE = MergeTree
         ORDER BY crawl_day_of_week
@@ -40,7 +40,7 @@ def main():
         CREATE TABLE data_mart.df_trend_category (
                 category_name String,
                 total_quantity_sold  UInt64,
-                total_income UInt128,
+                total_income UInt64,
                 avg_quantity_sold Float64 )
         ENGINE = MergeTree
         ORDER BY category_name
@@ -52,7 +52,7 @@ def main():
                 category_name String,
                 crawl_day_of_week String,
                 total_quantity_sold UInt64,
-                total_income UInt128,
+                total_income UInt64,
                 avg_quantity_sold Float64)
         ENGINE = MergeTree
         ORDER BY category_name
@@ -63,7 +63,7 @@ def main():
         CREATE TABLE data_mart.df_marketplace (
                 source_name String,
                 total_quantity_sold UInt64,
-                total_income UInt128,
+                total_income UInt64,
                 avg_quantity_sold Float64)
         ENGINE = MergeTree
         ORDER BY source_name
@@ -76,7 +76,7 @@ def main():
                 category_name String,
                 crawl_day_of_week String,
                 total_quantity_sold UInt64,
-                total_income UInt128,
+                total_income UInt64,
                 avg_quantity_sold Float64)
         ENGINE = MergeTree
         ORDER BY (category_name, source_name)
@@ -88,7 +88,7 @@ def main():
                 source_name String,
                 category_name String,
                 total_quantity_sold UInt64,
-                total_income UInt128,
+                total_income UInt64,
                 avg_quantity_sold Float64)
         ENGINE = MergeTree
         ORDER BY (category_name, source_name)

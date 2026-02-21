@@ -4,7 +4,8 @@ from pathlib import Path
 
 def push():
     now = datetime.now()
-    date_str = f"{now.day}-{now.month}-{now.year}"
+    # date_str = f"{now.day}-{now.month}-{now.year}"
+    date_str = f"{18}-{2}-{2026}"
     client = Minio(
         "minio:9000",
         access_key="minioadmin",

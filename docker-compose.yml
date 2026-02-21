@@ -214,7 +214,7 @@ services:
       - "9090:9090"
     environment:
       CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: your_password
+      CLICKHOUSE_PASSWORD: your_pass
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     healthcheck:

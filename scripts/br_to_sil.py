@@ -19,18 +19,19 @@ def main():
     
 # read data
     day_process = datetime.now()
-    day = day_process.day
-    month = day_process.month
-    year = day_process.year
-    # day = 28
-    # month = 1
-    # year = 2026
+    # day = day_process.day
+    # month = day_process.month
+    # year = day_process.year
+    day = 15
+    month = 2
+    year = 2026
     try:
         df_tiki = spark.read.option('multiline', 'true') \
-                .json(f's3a://data/bronze/{day}-{month}-{year}/tiki_*.json')
+                .json(f's3a://data/bronze/{day}-{month}-{year}/tiki_*.json').repartition(10)
         print('read data tiki successfully')
     except Exception as e: 
         print(e)
+        df_tiki = None
     
     try:
         df_lazada = spark.read.option('multiline', 'true') \
@@ -38,6 +39,7 @@ def main():
         print('read data lazada successfully')
     except Exception as e:
         print(e)
+        df_lazada = None
 
 # processing
     # tiki
@@ -179,7 +181,18 @@ def main():
         print('Lazada data is None')
 # merge dataframe
     print('merge data')
-    df_merged = df_tiki.unionByName(df_lazada)
+    if df_tiki is not None and df_lazada is not None:
+        df_merged = df_tiki.unionByName(df_lazada)
+    elif df_tiki is not None:
+        df_merged = df_tiki
+        print('Only Tiki data available')
+    elif df_lazada is not None:
+        df_merged = df_lazada
+        print('Only Lazada data available')
+    else:
+        print('No data from either source. Exiting.')
+        spark.stop()
+        return
     df_merged = df_merged.withColumn(
         'income',
         col('product_price').cast('bigint')*col('quantity_sold').cast('bigint')
@@ -190,12 +203,11 @@ def main():
     try:
         output_path = f"s3a://data/silver/{day}-{month}-{year}"
         df_merged \
-            .coalesce(1) \
             .write \
             .mode("overwrite") \
             .format("parquet") \
             .save(output_path)
-
+                    # .coalesce(1) \
         print(f"Successfully saved to S3: {output_path}")
         print('Bronze To Silver Spark Job: DONE!')
     except Exception as e:

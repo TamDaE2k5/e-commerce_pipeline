@@ -17,7 +17,7 @@ client = Client(
     host='clickhouse-server',
     port=9000,
     user='default',
-    password='your_password'
+    password='Nghiemtam05@'
 )
 
 def read_data(bucketname, prefix):
@@ -47,6 +47,15 @@ def insert_data(df, table):
     try:
         if isinstance(df.index, pd.MultiIndex):
             df = df.reset_index()
+        for col in df.select_dtypes(include=['float', 'int']).columns:
+            if 'income' in col or 'quantity' in col:
+                # Thay thế NaN bằng 0 và chuyển sang int (nếu phù hợp)
+                df[col] = df[col].fillna(0).astype('int64')
+            else:
+                df[col] = df[col].fillna(0)
+        for col in df.select_dtypes(include=['object']).columns:
+            df[col] = df[col].fillna('').astype(str)
+            
         data = df.to_records(index=False).tolist()
         columns = ', '.join(df.columns)
         query = f"INSERT INTO data_mart.{table} ({columns}) VALUES"
