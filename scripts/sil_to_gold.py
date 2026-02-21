@@ -16,12 +16,12 @@ def main():
     
     # b2 đọc data
     now = datetime.now()
-    # day = now.day
-    # month = now.month
-    # year = now.year
-    day = 15
-    month = 2
-    year = 2026
+    day = now.day
+    month = now.month
+    year = now.year
+    # day = 15
+    # month = 2
+    # year = 2026
     try:
         df_silver = spark.read.parquet(f"s3a://data/silver/{day}-{month}-{year}/*.parquet")
         print('read data successfully')

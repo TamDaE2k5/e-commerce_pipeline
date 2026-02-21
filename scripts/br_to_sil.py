@@ -19,12 +19,12 @@ def main():
     
 # read data
     day_process = datetime.now()
-    # day = day_process.day
-    # month = day_process.month
-    # year = day_process.year
-    day = 15
-    month = 2
-    year = 2026
+    day = day_process.day
+    month = day_process.month
+    year = day_process.year
+    # day = 15
+    # month = 2
+    # year = 2026
     try:
         df_tiki = spark.read.option('multiline', 'true') \
                 .json(f's3a://data/bronze/{day}-{month}-{year}/tiki_*.json').repartition(10)

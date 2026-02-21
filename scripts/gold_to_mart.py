@@ -17,7 +17,7 @@ client = Client(
     host='clickhouse-server',
     port=9000,
     user='default',
-    password='Nghiemtam05@'
+    password='your_pass'
 )
 
 def read_data(bucketname, prefix):
