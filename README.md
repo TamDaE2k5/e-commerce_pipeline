@@ -1,4 +1,4 @@
-**docker build --no-cache**
+**docker build --no-cache -t apache/airflow:2.10.2-python3.8 .**
 ---
 **package**
 - aws-java-sdk-bundle-1.12.262.jar

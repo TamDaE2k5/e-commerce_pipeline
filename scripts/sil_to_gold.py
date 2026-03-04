@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import *
 from pyspark.sql.types import *
+from functools import reduce
 from datetime import datetime
 from urllib.parse import urlparse
 def main():
@@ -16,20 +17,54 @@ def main():
     
     # b2 đọc data
     now = datetime.now()
-    day = now.day
-    month = now.month
-    year = now.year
-    # day = 15
-    # month = 2
-    # year = 2026
-    try:
-        df_silver = spark.read.parquet(f"s3a://data/silver/{day}-{month}-{year}/*.parquet")
-        print('read data successfully')
-    except Exception as e:
-        print('error when read data', e)
-        raise
+    # day = now.day
+    # month = now.month
+    # year = now.year
+    day = 3
+    month = 3
+    year = 2026
+    
+    core_columns = [
+      "Src",
+      "category",
+      "crawl_full_day",
+      "crawl_timestamp",
+      "discount_rate",
+      "product_name",
+      "origin",
+      "product_price",
+      "quantity_sold",
+      "product_original_price",
+      "product_discount",
+      "crawl_day_of_week",
+      "crawl_month",
+      "crawl_year",
+      "crawl_day",
+      "income"
+    ]
+    dfs=[]
+    for e in ['tiki', 'lazada', 'shopee']:
+        path = path = f"s3a://data/silver/{day}-{month}-{year}/{e}/*.parquet"
+        try:
+            df = spark.read.parquet(path)
+            dfs.append(df.select(core_columns))
+            print('read data successfully')
+        except Exception as e:
+            print('error when read data', e)
+            continue   
     # b3 phân rã data
         # dim_date
+    if not dfs:
+        print("No data today. Skip Gold job.")
+        spark.stop()
+        return
+    elif len(dfs)==1:
+        df_silver = dfs[0]
+    else:
+        df_silver = reduce(
+            lambda x, y: x.unionByName(y, allowMissingColumns=True),dfs)
+    
+    df_silver = reduce(lambda x, y: x.unionByName(y, allowMissingColumns=True), dfs)
     dim_date_new = (
         df_silver
         .select(
@@ -140,11 +175,11 @@ def main():
         )
     # fact.show()
     # b4 lưu vào tmp do spark lazy (overwrite bị xoá dữ liệu nên ko overwrite dc vào file cũ (file cũ bị xoá))
-    dim_date.coalesce(1).write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_date")
-    dim_category.coalesce(1).write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_category")
-    dim_source.coalesce(1).write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_source")
-    dim_product.coalesce(1).write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_product")
-    fact.coalesce(1).write.mode("append") \
+    dim_date.write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_date")
+    dim_category.write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_category")
+    dim_source.write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_source")
+    dim_product.write.mode("overwrite").parquet(f"s3a://data/gold/star1/_tmp/dim_product")
+    fact.write.mode("append") \
         .parquet("s3a://data/gold/star1/fact_product_sale")
 
     # b5 lưu schema vào gold
@@ -163,7 +198,7 @@ def main():
         tmp_uri = jvm.java.net.URI(tmp_path)
         final_uri = jvm.java.net.URI(final_path)
 
-        # 🔥 LẤY FILESYSTEM ĐÚNG THEO URI
+        # LẤY FILESYSTEM ĐÚNG THEO URI
         fs = jvm.org.apache.hadoop.fs.FileSystem.get(tmp_uri, hadoop_conf)
 
         tmp_p = jvm.org.apache.hadoop.fs.Path(tmp_path)
